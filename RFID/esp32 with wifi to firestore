@@ -1,0 +1,102 @@
+#include <WiFi.h>
+#include <SPI.h>
+#include <MFRC522.h>
+#include <Firebase_ESP_Client.h>
+
+// RFID Pins
+#define SS_PIN 5
+#define RST_PIN 22
+#define SCK_PIN 18
+#define MISO_PIN 19
+#define MOSI_PIN 23
+
+// WiFi
+#define WIFI_SSID "^j$d"
+#define WIFI_PASSWORD "dhivya@2006"
+
+// Firebase
+#define API_KEY "AIzaSyBED7zrAysWbMZY9l4pE3G2HVy4XF0W138"
+#define FIREBASE_PROJECT_ID "trackid-f5f9a"
+
+// Firebase Authentication
+#define USER_EMAIL "dhivyasris2023@gmail.com"
+#define USER_PASSWORD "Dhivya@nov3"
+
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+void setup() {
+
+  Serial.begin(115200);
+
+  // Connect to WiFi
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to WiFi");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println();
+  Serial.println("WiFi Connected");
+  Serial.println(WiFi.localIP());
+
+  // Firebase configuration
+  config.api_key = API_KEY;
+  auth.user.email = USER_EMAIL;
+  auth.user.password = USER_PASSWORD;
+ 
+
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  // Start SPI and RFID
+  SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
+  rfid.PCD_Init();
+
+  Serial.println("Scan RFID card...");
+}
+
+void loop() {
+
+  // Wait for card
+  if (!rfid.PICC_IsNewCardPresent()) return;
+  if (!rfid.PICC_ReadCardSerial()) return;
+
+  String uid = "";
+
+  for (byte i = 0; i < rfid.uid.size; i++) {
+    if (rfid.uid.uidByte[i] < 0x10) uid += "0";
+    uid += String(rfid.uid.uidByte[i], HEX);
+  }
+
+  uid.toUpperCase();
+
+  Serial.print("UID: ");
+  Serial.println(uid);
+
+  // Firestore JSON format
+  String json = "{\"fields\":{\"uid\":{\"stringValue\":\"" + uid + "\"}}}";
+
+  bool success = Firebase.Firestore.patchDocument(
+    &fbdo,
+    FIREBASE_PROJECT_ID,
+    "",
+    "scans/latest",
+    json.c_str(),
+    "uid"
+  );
+
+  if (success) {
+    Serial.println("UID sent to Firebase");
+  } else {
+    Serial.println("Error:");
+    Serial.println(fbdo.errorReason());
+  }
+
+  delay(2000);
+}
