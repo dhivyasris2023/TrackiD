@@ -3,133 +3,141 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'third.dart';
 import 'fourth.dart';
 
-class CreateAccountPage extends StatefulWidget {
-  const CreateAccountPage({super.key});
+class SignUpPage extends StatefulWidget {
+  const SignUpPage({super.key});
 
   @override
-  State<CreateAccountPage> createState() => _CreateAccountPageState();
+  State<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _CreateAccountPageState extends State<CreateAccountPage> {
-  final parentName = TextEditingController();
-  final email = TextEditingController();
-  final password = TextEditingController();
-  bool hidePassword = true;
-  bool loading = false;
+class _SignUpPageState extends State<SignUpPage> {
+  final _formKey = GlobalKey<FormState>();
+
+  final nameCtrl = TextEditingController();
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+
+  bool showPass = false;
 
   Future<void> signUp() async {
-    setState(() => loading = true);
+    if (!_formKey.currentState!.validate()) return;
+
     try {
-      final cred = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-        email: email.text.trim(),
-        password: password.text.trim(),
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: emailCtrl.text.trim(),
+        password: passCtrl.text.trim(),
       );
 
       if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Account created successfully")),
+      );
 
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => ThirdPage(
-            uid: cred.user!.uid,
-            parentName: parentName.text.trim(),
-            email: email.text.trim(),
+            parentName: nameCtrl.text.trim(),
+            parentEmail: emailCtrl.text.trim(),
           ),
         ),
       );
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
-    } finally {
-      setState(() => loading = false);
-    }
-  }
-
-  Widget field(String hint, TextEditingController c,
-      {bool obscure = false, Widget? suffix}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: TextField(
-        controller: c,
-        obscureText: obscure,
-        decoration: InputDecoration(
-          hintText: hint,
-          suffixIcon: suffix,
-          filled: true,
-          fillColor: Colors.grey.shade300,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Account already exists. Please login."),
           ),
-        ),
-      ),
-    );
+        );
+      } else {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message!)));
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
+      backgroundColor: const Color(0xFFFFF7F9),
       body: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ClipOval(
-              child: Image.asset(
-                'assets/srm.png',
-                width: 80,
-                height: 80,
-                fit: BoxFit.cover,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // ✅ CLEAN CIRCULAR LOGO (NO OVAL, NO BLACK EDGE)
+              Container(
+                width: 90,
+                height: 90,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.transparent,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(45),
+                  child: Image.asset(
+                    'assets/srm.png',
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Create Account',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            field('Parent Name', parentName),
-            field('Parent Email', email),
-            field(
-              'Password',
-              password,
-              obscure: hidePassword,
-              suffix: IconButton(
-                icon: Icon(
-                    hidePassword ? Icons.visibility : Icons.visibility_off),
-                onPressed: () =>
-                    setState(() => hidePassword = !hidePassword),
+
+              const SizedBox(height: 20),
+
+              TextFormField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: "Parent Name"),
+                validator: (v) => v!.isEmpty ? "Required" : null,
               ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
+
+              TextFormField(
+                controller: emailCtrl,
+                decoration: const InputDecoration(labelText: "Email"),
+                validator: (v) => v!.contains('@') ? null : "Invalid email",
+              ),
+
+              TextFormField(
+                controller: passCtrl,
+                obscureText: !showPass,
+                decoration: InputDecoration(
+                  labelText: "Password",
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      showPass ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    onPressed: () =>
+                        setState(() => showPass = !showPass),
+                  ),
+                ),
+                validator: (v) =>
+                    v!.length < 6 ? "Min 6 characters" : null,
+              ),
+
+              const SizedBox(height: 30),
+
+              ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0B3D2E)),
-                onPressed: loading ? null : signUp,
-                child: loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Sign Up'),
+                  backgroundColor: Colors.green,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                onPressed: signUp,
+                child: const Text("Create Account"),
               ),
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-              },
-              child: const Text(
-                'Already have an account? Login here',
-                style: TextStyle(color: Colors.blue),
+
+              TextButton(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
+                },
+                child: const Text("Already have an account? Login"),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
