@@ -1,22 +1,23 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'second.dart';
 
-class SplashPage extends StatefulWidget {
-  const SplashPage({super.key});
+class FrontPage extends StatefulWidget {
+  const FrontPage({super.key});
 
   @override
-  State<SplashPage> createState() => _SplashPageState();
+  State<FrontPage> createState() => _FrontPageState();
 }
 
-class _SplashPageState extends State<SplashPage> {
+class _FrontPageState extends State<FrontPage> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
+    Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const CreateAccountPage()),
+        MaterialPageRoute(builder: (_) => const SignUpPage()),
       );
     });
   }
@@ -24,26 +25,36 @@ class _SplashPageState extends State<SplashPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
+      backgroundColor: const Color(0xFFFFF7F9),
       body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            ClipOval(
-              child: Image.asset(
-                'assets/srm.png',
-                width: 120,
-                height: 120,
-                fit: BoxFit.cover,
+            // ✅ PERFECT CIRCULAR LOGO (NO OVAL, NO STRETCH)
+            Container(
+              width: 120,
+              height: 120,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.transparent,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(60),
+                child: Image.asset(
+                  'assets/srm.png',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
+
             const SizedBox(height: 20),
-            const Text('Welcome to'),
+
             const Text(
               'TRACKiD',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
               ),
             ),
           ],
