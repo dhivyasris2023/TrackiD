@@ -3,15 +3,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'fifth.dart';
 
 class ThirdPage extends StatefulWidget {
-  final String uid;
   final String parentName;
-  final String email;
+  final String parentEmail;
 
   const ThirdPage({
     super.key,
-    required this.uid,
     required this.parentName,
-    required this.email,
+    required this.parentEmail,
   });
 
   @override
@@ -19,92 +17,109 @@ class ThirdPage extends StatefulWidget {
 }
 
 class _ThirdPageState extends State<ThirdPage> {
-  final studentName = TextEditingController();
-  final studentNumber = TextEditingController();
-  final rollNumber = TextEditingController();
-  final guardian1 = TextEditingController();
-  final guardian2 = TextEditingController();
+  final studentCtrl = TextEditingController();
+  final rollCtrl = TextEditingController();
+  final numCtrl = TextEditingController();
+  final g1Ctrl = TextEditingController();
+  final g2Ctrl = TextEditingController();
 
-  Future<void> save() async {
-    await FirebaseFirestore.instance
+  Future<void> saveStudent() async {
+    if ([studentCtrl, rollCtrl, numCtrl, g1Ctrl, g2Ctrl]
+        .any((c) => c.text.isEmpty)) {
+      msg("Fill all fields");
+      return;
+    }
+
+    final existing = await FirebaseFirestore.instance
         .collection('students')
-        .doc(widget.uid)
-        .set({
+        .where('rollNumber', isEqualTo: rollCtrl.text.trim())
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      msg("Student with this roll number already exists");
+      return;
+    }
+
+    await FirebaseFirestore.instance.collection('students').add({
       'parentName': widget.parentName,
-      'email': widget.email,
-      'studentName': studentName.text.trim(),
-      'studentNumber': studentNumber.text.trim(),
-      'rollNumber': rollNumber.text.trim(),
-      'guardian1': guardian1.text.trim(),
-      'guardian2': guardian2.text.trim(),
+      'email': widget.parentEmail,
+      'studentName': studentCtrl.text.trim(),
+      'rollNumber': rollCtrl.text.trim(),
+      'studentNumber': numCtrl.text.trim(),
+      'guardian1': g1Ctrl.text.trim(),
+      'guardian2': g2Ctrl.text.trim(),
     });
 
     if (!mounted) return;
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => FifthPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const FifthPage()),
     );
   }
 
-  Widget field(String hint, TextEditingController c) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: TextField(
-        controller: c,
-        decoration: InputDecoration(
-          hintText: hint,
-          filled: true,
-          fillColor: Colors.grey.shade300,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
-    );
+  void msg(String t) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(t)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: SingleChildScrollView(
           child: Column(
             children: [
-              ClipOval(
-                child: Image.asset(
-                  'assets/srm.png',
-                  width: 80,
-                  height: 80,
-                  fit: BoxFit.cover,
+              // ✅ CLEAN CIRCULAR LOGO (IMAGE ONLY CHANGED)
+              Container(
+                width: 90,
+                height: 90,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.transparent,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(45),
+                  child: Image.asset(
+                    'assets/srm.png',
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Student Details',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+
+              TextField(
+                controller: studentCtrl,
+                decoration:
+                    const InputDecoration(labelText: "Student Name"),
+              ),
+              TextField(
+                controller: rollCtrl,
+                decoration:
+                    const InputDecoration(labelText: "Roll Number"),
+              ),
+              TextField(
+                controller: numCtrl,
+                decoration:
+                    const InputDecoration(labelText: "Student Number"),
+              ),
+              TextField(
+                controller: g1Ctrl,
+                decoration:
+                    const InputDecoration(labelText: "Guardian 1"),
+              ),
+              TextField(
+                controller: g2Ctrl,
+                decoration:
+                    const InputDecoration(labelText: "Guardian 2"),
               ),
               const SizedBox(height: 20),
-              field('Student Name', studentName),
-              field('Student Number', studentNumber),
-              field('Student Roll Number', rollNumber),
-              field('Guardian 1 Number', guardian1),
-              field('Guardian 2 Number', guardian2),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0B3D2E)),
-                  onPressed: save,
-                  child: const Text('Next'),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
                 ),
+                onPressed: saveStudent,
+                child: const Text("Save"),
               ),
             ],
           ),
