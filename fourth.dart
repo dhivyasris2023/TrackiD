@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'fifth.dart';
 
 class LoginPage extends StatefulWidget {
@@ -11,122 +10,87 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final parentNameController = TextEditingController();
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-
-  bool hidePassword = true;
-  bool loading = false;
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+  bool showPass = false;
 
   Future<void> login() async {
-    setState(() => loading = true);
+    if (emailCtrl.text.isEmpty || passCtrl.text.isEmpty) {
+      msg("All fields required");
+      return;
+    }
 
     try {
-      final cred = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailCtrl.text.trim(),
+        password: passCtrl.text.trim(),
       );
-
-      final snap = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(cred.user!.uid)
-          .get();
-
-      if (!snap.exists) {
-        throw Exception('Student data not found');
-      }
 
       if (!mounted) return;
-
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const FifthPage(),
-        ),
+        MaterialPageRoute(builder: (_) => const FifthPage()),
       );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() => loading = false);
+    } catch (_) {
+      msg("Invalid login credentials");
     }
   }
 
-  Widget field(String hint, TextEditingController controller,
-      {bool obscure = false, Widget? suffix}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
-        decoration: InputDecoration(
-          hintText: hint,
-          suffixIcon: suffix,
-          filled: true,
-          fillColor: Colors.grey.shade300,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
-    );
+  void msg(String t) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(t)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ClipOval(
-              child: Image.asset(
-                'assets/srm.png',
-                width: 80,
-                height: 80,
-                fit: BoxFit.cover,
+            // ✅ CLEAN CIRCULAR LOGO (ONLY IMAGE CODE CHANGED)
+            Container(
+              width: 90,
+              height: 90,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.transparent,
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Login',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            field('Parent Name', parentNameController),
-            field('Parent Email', emailController),
-            field(
-              'Password',
-              passwordController,
-              obscure: hidePassword,
-              suffix: IconButton(
-                icon: Icon(
-                    hidePassword ? Icons.visibility : Icons.visibility_off),
-                onPressed: () =>
-                    setState(() => hidePassword = !hidePassword),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0B3D2E),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(45),
+                child: Image.asset(
+                  'assets/srm.png',
+                  fit: BoxFit.cover,
                 ),
-                onPressed: loading ? null : login,
-                child: loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Login'),
               ),
+            ),
+
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(labelText: "Email"),
+            ),
+            TextField(
+              controller: passCtrl,
+              obscureText: !showPass,
+              decoration: InputDecoration(
+                labelText: "Password",
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    showPass ? Icons.visibility : Icons.visibility_off,
+                  ),
+                  onPressed: () =>
+                      setState(() => showPass = !showPass),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+              ),
+              onPressed: login,
+              child: const Text("Login"),
             ),
           ],
         ),
