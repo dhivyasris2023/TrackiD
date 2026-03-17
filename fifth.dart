@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,43 +11,41 @@ class FifthPage extends StatefulWidget {
 }
 
 class _FifthPageState extends State<FifthPage> {
-  DateTime now = DateTime.now();
+  late Future<Map<String, dynamic>> studentFuture;
   DateTime selectedDate = DateTime.now();
-  Timer? timer;
 
-  String parentName = '';
-  String studentName = '';
-  String rollNumber = '';
+  int scanCount = 0;
+
+  String morningEntry = "--";
+  String morningExit = "--";
+  String eveningEntry = "--";
+  String eveningExit = "--";
 
   @override
   void initState() {
     super.initState();
-    loadData();
-
-    timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() => now = DateTime.now());
-    });
+    studentFuture = fetchStudent();
+    listenForScan(); // START LISTENING TO RFID SCANS
   }
 
-  Future<void> loadData() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    final doc = await FirebaseFirestore.instance
+  Future<Map<String, dynamic>> fetchStudent() async {
+    final email = FirebaseAuth.instance.currentUser!.email!;
+    final snap = await FirebaseFirestore.instance
         .collection('students')
-        .doc(uid)
+        .where('email', isEqualTo: email)
+        .limit(1)
         .get();
 
-    setState(() {
-      parentName = doc['parentName'];
-      studentName = doc['studentName'];
-      rollNumber = doc['rollNumber'];
-    });
+    if (snap.docs.isEmpty) {
+      throw Exception("Student record not found");
+    }
+
+    return snap.docs.first.data();
   }
 
   Future<void> logout() async {
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
-
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -56,67 +53,75 @@ class _FifthPageState extends State<FifthPage> {
     );
   }
 
-  @override
-  void dispose() {
-    timer?.cancel();
-    super.dispose();
-  }
+  // LISTEN TO FIREBASE SCANS
+  void listenForScan() {
+    FirebaseFirestore.instance
+        .collection('scans')
+        .doc('latest')
+        .snapshots()
+        .listen((snapshot) {
 
-  Widget logBox(String title, String entry, String exit) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text('Entry Time:\n$entry'),
-          const SizedBox(height: 6),
-          Text('Exit Time:\n$exit'),
-        ],
-      ),
-    );
+      if (!snapshot.exists) return;
+
+      setState(() {
+
+        scanCount++;
+
+        String timeNow = TimeOfDay.now().format(context);
+
+        if (scanCount == 1) {
+          morningEntry = timeNow;
+        } else if (scanCount == 2) {
+          morningExit = timeNow;
+        } else if (scanCount == 3) {
+          eveningEntry = timeNow;
+        } else if (scanCount == 4) {
+          eveningExit = timeNow;
+        }
+
+      });
+
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final timeNow = TimeOfDay.now().format(context);
+    final dateNow =
+        "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}";
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: Colors.green,
         title: Row(
           children: [
-            ClipOval(
-              child: Image.asset(
-                'assets/srm.png',
-                width: 36,
-                height: 36,
-                fit: BoxFit.cover,
+            Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.transparent,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/srm.png',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             const SizedBox(width: 10),
-            const Text(
-              'TRACKiD',
-              style: TextStyle(color: Colors.black),
-            ),
+            const Text("TRACKiD"),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_today, color: Colors.black),
+            icon: const Icon(Icons.calendar_month),
             onPressed: () async {
               final picked = await showDatePicker(
                 context: context,
                 initialDate: selectedDate,
-                firstDate: DateTime(2020),
+                firstDate: DateTime(2023),
                 lastDate: DateTime(2100),
               );
               if (picked != null) {
@@ -124,55 +129,117 @@ class _FifthPageState extends State<FifthPage> {
               }
             },
           ),
-          PopupMenuButton(
-            icon: const Icon(Icons.person, color: Colors.black),
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                child: Text('Parent: $parentName'),
-              ),
-              PopupMenuItem(
-                child: Text('Roll No: $rollNumber'),
-              ),
-              PopupMenuItem(
-                onTap: logout,
-                child: const Text(
-                  'Logout',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: studentFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text(snapshot.error.toString()));
+          }
+
+          final data = snapshot.data!;
+          final parentName = data['parentName'] ?? '—';
+          final studentName = data['studentName'] ?? '—';
+          final rollNumber = data['rollNumber'] ?? '—';
+
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Showing log of $studentName",
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text("Roll Number: $rollNumber"),
+                        Text("Date: $dateNow"),
+                        Text("Time: $timeNow"),
+                      ],
+                    ),
+                    PopupMenuButton<int>(
+                      icon: const Icon(Icons.person),
+                      itemBuilder: (_) => <PopupMenuEntry<int>>[
+                        PopupMenuItem<int>(
+                          enabled: false,
+                          child: Text("Parent: $parentName"),
+                        ),
+                        PopupMenuItem<int>(
+                          enabled: false,
+                          child: Text("Student: $studentName"),
+                        ),
+                        PopupMenuItem<int>(
+                          enabled: false,
+                          child: Text("Roll No: $rollNumber"),
+                        ),
+                        const PopupMenuDivider(),
+                        PopupMenuItem<int>(
+                          value: 1,
+                          child: const Text("Logout"),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 1) logout();
+                      },
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 25),
+
+                _logCard(
+                  title: " Morning Reporting Time:",
+                  entry: morningEntry,
+                  exit: morningExit,
+                ),
+
+                _logCard(
+                  title: "Evening Reporting Time:",
+                  entry: eveningEntry,
+                  exit: eveningExit,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _logCard({
+    required String title,
+    required String entry,
+    required String exit,
+  }) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 3,
+      margin: const EdgeInsets.only(bottom: 15),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+              title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            const SizedBox(height: 4),
-            Text(
-              now.toLocal().toString().split('.')[0],
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Showing log of $studentName',
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 14),
-            logBox(
-              'Results of morning:',
-              'Your ward has entered the bus at 8:00 AM',
-              'Your ward has exited the bus at 8:35 AM',
-            ),
-            logBox(
-              'Results of evening:',
-              'Your ward has entered the bus at 4:03 PM',
-              'Your ward has exited the bus at 5:20 PM',
-            ),
+            const SizedBox(height: 8),
+            Text("Entry Time: $entry"),
+            Text("Exit Time: $exit"),
           ],
         ),
       ),
